@@ -1,13 +1,14 @@
 const axios = require('axios');
 const { client } = require('../utils/redisClient');
 
-const NBA_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard';
-const CACHE_KEY_SCHEDULE = 'nba:schedule';
-const CACHE_KEY_LIVE = 'nba:live';
+// ESPN API endpoint for MLB scoreboard
+const MLB_SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard';
+const CACHE_KEY_SCHEDULE = 'mlb:schedule';
+const CACHE_KEY_LIVE = 'mlb:live';
 
-async function fetchNBAData() {
+async function fetchMLBData() {
   try {
-    const response = await axios.get(NBA_SCOREBOARD_URL);
+    const response = await axios.get(MLB_SCOREBOARD_URL);
     const games = response.data.events || [];
 
     const now = new Date();
@@ -15,7 +16,7 @@ async function fetchNBAData() {
     const upcomingGames = [];
 
     games.forEach(event => {
-      const game = parseNBAGame(event);
+      const game = parseMLBGame(event);
 
       if (game.status === 'in') {
         liveGames.push(game);
@@ -36,16 +37,16 @@ async function fetchNBAData() {
       EX: 900 // 15 minutes TTL for schedule
     });
 
-    console.log(`✓ NBA: ${liveGames.length} live, ${upcomingGames.length} upcoming`);
+    console.log(`✓ MLB: ${liveGames.length} live, ${upcomingGames.length} upcoming`);
 
     return { live: liveGames, upcoming: upcomingGames };
   } catch (error) {
-    console.error('Error fetching NBA data:', error.message);
+    console.error('Error fetching MLB data:', error.message);
     return { live: [], upcoming: [] };
   }
 }
 
-function parseNBAGame(event) {
+function parseMLBGame(event) {
   const competition = event.competitions[0];
   const homeTeam = competition.competitors.find(c => c.homeAway === 'home');
   const awayTeam = competition.competitors.find(c => c.homeAway === 'away');
@@ -56,7 +57,7 @@ function parseNBAGame(event) {
 
   return {
     id: event.id,
-    sport: 'NBA',
+    sport: 'MLB',
     date: event.date,
     status: competition.status.type.state, // 'pre', 'in', 'post'
     homeTeam: {
@@ -72,9 +73,13 @@ function parseNBAGame(event) {
       score: awayTeam.score || '0'
     },
     clock: competition.status.displayClock || '',
-    period: competition.status.period || 0,
+    // MLB uses innings instead of periods/quarters
+    period: competition.status.period || 0, // This represents the inning
     statusDetail: competition.status.type.detail,
     channel: channel,
+    // MLB-specific: Include inning information
+    inning: competition.status.period || 0,
+    inningState: competition.status.type.shortDetail || '', // Top/Bottom of inning
     venue: competition.venue ? {
       name: competition.venue.fullName || '',
       city: competition.venue.address?.city || ''
@@ -82,7 +87,7 @@ function parseNBAGame(event) {
   };
 }
 
-async function getNBAData() {
+async function getMLBData() {
   try {
     const liveData = await client.get(CACHE_KEY_LIVE);
     const scheduleData = await client.get(CACHE_KEY_SCHEDULE);
@@ -92,9 +97,9 @@ async function getNBAData() {
       upcoming: scheduleData ? JSON.parse(scheduleData) : []
     };
   } catch (error) {
-    console.error('Error getting NBA data from cache:', error.message);
+    console.error('Error getting MLB data from cache:', error.message);
     return { live: [], upcoming: [] };
   }
 }
 
-module.exports = { fetchNBAData, getNBAData };
+module.exports = { fetchMLBData, getMLBData };

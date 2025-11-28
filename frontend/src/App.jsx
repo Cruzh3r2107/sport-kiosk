@@ -1,40 +1,34 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
-import NBADisplay from './components/NBADisplay';
+import UnifiedSportsDisplay from './components/UnifiedSportsDisplay';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-const SPORTS_ORDER = ['NBA', 'NFL', 'F1', 'CRICKET', 'MLB', 'TOUR'];
-const CYCLE_INTERVAL = 30000; // 30 seconds
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 function App() {
-  const [currentSportIndex, setCurrentSportIndex] = useState(0);
-  const [nbaData, setNbaData] = useState(null);
+  const [allSportsData, setAllSportsData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  const currentSport = SPORTS_ORDER[currentSportIndex];
-
-  // Fetch NBA data
+  // Fetch all sports data
   useEffect(() => {
-    async function fetchNBA() {
+    async function fetchAllSports() {
       try {
-        const response = await axios.get(`${API_URL}/api/sports/nba`);
-        setNbaData(response.data);
+        const response = await axios.get(`${API_URL}/api/sports/all`);
+        setAllSportsData(response.data);
         setError(null);
       } catch (err) {
-        console.error('Error fetching NBA data:', err);
+        console.error('Error fetching sports data:', err);
         setError('Failed to fetch data');
       } finally {
         setLoading(false);
       }
     }
 
-    fetchNBA();
+    fetchAllSports();
     // Fetch every 60 seconds to get live updates
-    const interval = setInterval(fetchNBA, 60000);
+    const interval = setInterval(fetchAllSports, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -44,14 +38,6 @@ function App() {
       setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
-
-  // Cycle through sports
-  useEffect(() => {
-    const cycleTimer = setInterval(() => {
-      setCurrentSportIndex((prev) => (prev + 1) % SPORTS_ORDER.length);
-    }, CYCLE_INTERVAL);
-    return () => clearInterval(cycleTimer);
   }, []);
 
   const formatTime = (date) => {
@@ -74,18 +60,11 @@ function App() {
   return (
     <div className="kiosk-container">
       <div className="header">
-        <div className="sport-title">{currentSport}</div>
+        <div className="sport-title">Sports Kiosk</div>
         <div className="time-display">{formatTime(currentTime)}</div>
       </div>
 
-      <div className="content">
-        {currentSport === 'NBA' && <NBADisplay data={nbaData} />}
-        {currentSport !== 'NBA' && (
-          <div className="no-games">
-            {currentSport} - Coming Soon
-          </div>
-        )}
-      </div>
+      <UnifiedSportsDisplay data={allSportsData} />
 
       {error && <div className="error">{error}</div>}
     </div>

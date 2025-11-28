@@ -9,13 +9,13 @@ body {
   background-color: #0a0a0a;
   color: #ffffff;
   overflow: hidden;
-  width: 1024px;
-  height: 768px;
+  width: 100vw;
+  height: 100vh;
 }
 
 #root {
-  width: 1024px;
-  height: 768px;
+  width: 100vw;
+  height: 100vh;
 }
 
 .kiosk-container {
@@ -27,7 +27,7 @@ body {
 }
 
 .header {
-  height: 80px;
+  height: 100px;
   background: rgba(20, 20, 20, 0.95);
   border-bottom: 2px solid #ff6b35;
   display: flex;
@@ -51,9 +51,9 @@ body {
 }
 
 .time-display {
-  font-size: 24px;
-  color: #888;
-  font-weight: 300;
+  font-size: 60px;
+  color: #aaa;
+  font-weight: 700;
 }
 
 .content {
@@ -84,19 +84,19 @@ body {
 }
 
 .section-header {
-  font-size: 28px;
-  font-weight: 600;
-  margin-bottom: 20px;
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 24px;
   color: #ff6b35;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
 }
 
 .game-card {
   background: rgba(30, 30, 30, 0.8);
   border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 20px;
+  padding: 30px;
+  margin-bottom: 24px;
   border: 1px solid #333;
   transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -126,16 +126,17 @@ body {
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
-  font-size: 14px;
-  color: #888;
+  font-size: 24px;
+  font-weight: 600;
+  color: #bbb;
 }
 
 .live-indicator {
   background: #ff3535;
   color: white;
-  padding: 4px 12px;
+  padding: 6px 16px;
   border-radius: 20px;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 700;
   text-transform: uppercase;
   animation: blink 1.5s ease-in-out infinite;
@@ -153,7 +154,7 @@ body {
 .teams {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .team {
@@ -170,28 +171,29 @@ body {
 }
 
 .team-logo {
-  width: 50px;
-  height: 50px;
+  width: 60px;
+  height: 60px;
   object-fit: contain;
 }
 
 .team-name {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 700;
 }
 
 .team-score {
-  font-size: 36px;
+  font-size: 48px;
   font-weight: 700;
   color: #ff6b35;
-  min-width: 60px;
+  min-width: 80px;
   text-align: right;
 }
 
 .game-date {
-  font-size: 18px;
-  color: #aaa;
-  margin-top: 8px;
+  font-size: 48px;
+  font-weight: 700;
+  color: #ffd700;
+  margin-top: 12px;
 }
 
 .no-games {

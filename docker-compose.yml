@@ -4,10 +4,9 @@ services:
   redis:
     image: redis:7-alpine
     container_name: sports-kiosk-redis
+    command: redis-server --save "" --appendonly no
     ports:
       - "6379:6379"
-    volumes:
-      - redis-data:/data
     restart: unless-stopped
 
   backend:
@@ -42,6 +41,3 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
-
-volumes:
-  redis-data:
