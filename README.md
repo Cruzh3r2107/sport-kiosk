@@ -1,557 +1,280 @@
-# Sports Kiosk Setup
+# Sport Kiosk
 
-Full-screen kiosk application displaying live sports scores and upcoming games for NBA, NFL, F1, MLB, and Tour de France on a Raspberry Pi 5.
+A full-stack sports kiosk displaying live scores and upcoming games for multiple sports. Optimized for tablet landscape viewing with a 60/40 split-screen layout when live games are active.
+
+**Source Code:** https://github.com/Cruzh3r2107/sport-kiosk
 
 ## Features
 
-- **Unified Sports View**: All sports displayed together on a single screen (no cycling)
-- **Live Scores**: Real-time scores updated every minute across all sports
-- **Upcoming Games**: Schedule updated every 15 minutes
-- **Adaptive Layout**:
-  - When live games exist: 60% shows ONE live game, 40% shows next 2 upcoming games
-  - When no live games: Full screen shows next 5 upcoming games chronologically
-- **Multi-Sport Auto-Scroll**: When multiple live games exist, rotates every 5 seconds
-- **Dark Mode**: Easy-on-the-eyes design for always-on displays
-- **Tablet Optimized**: Designed for 1024x768 resolution
-- **Chicago Timezone**: All times displayed in America/Chicago
-
-## Current Status
-
-- ✅ **NBA**: Fully functional with live scores and schedules
-- ✅ **NFL**: Fully functional with live scores and schedules
-- ✅ **F1**: Fully functional with race schedules
-- ✅ **MLB**: Fully functional (off-season currently)
-- ⚠️ **Tour de France**: API functional (seasonal event, July only)
+- **Live Score Display**: Large score panel with auto-rotation every 30s for multiple live games
+- **Upcoming Games**: Shows today's and tomorrow's scheduled games
+- **Multi-Sport Support**: NBA, NFL, MLB, F1, UFC, Cricket, Tennis
+- **Dark Theme**: Optimized for ambient viewing
+- **Tablet Optimized**: Touch-friendly, no scroll bounce, landscape layout
 
 ## Architecture
 
 ```
-Frontend (React + Vite) ← Nginx (Port 3000)
+Tablet Browser (landscape)
     ↓
-Backend (Node.js) ← Express API (Port 3001)
+Nginx (port 3000) → serves React frontend + proxies /api
     ↓
-Redis Cache ← In-memory (Port 6379)
+Node.js Backend (port 3001) → polls ESPN API, transforms data
+    ↓
+Redis Cache → stores responses (30s-15min TTL per sport)
 ```
 
-**Data Flow:**
-1. Backend fetches from ESPN API every 1 minute for all sports (NFL, NBA, F1, MLB, Tour de France)
-2. Data cached in Redis with TTLs (60s for live, 900s for schedule)
-3. Frontend polls /api/sports/all endpoint every 60 seconds
-4. Display shows unified view of all sports sorted chronologically
-5. Live games auto-scroll every 5 seconds (if multiple)
-
-## Installation
+## Quick Start
 
 ### Prerequisites
 
-This service is running on the Raspberry Pi 5. These instructions are for reference or reinstallation.
+- Docker and Docker Compose
+- SSD mounted at `/mnt/storage`
 
-### Initial Setup
+### Deploy
 
-1. **Clone the repository** (already done):
 ```bash
-cd ~/home-server
-git clone https://github.com/Cruzh3r2107/sport-kiosk.git
+# Create storage directory
+sudo mkdir -p /mnt/storage/sport-kiosk/redis
+sudo chown -R 1000:1000 /mnt/storage/sport-kiosk
+
+# Start services
+cd ~/raspberry-pi-server-setup/sport-kiosk
+docker compose up -d
+
+# View logs
+docker logs -f sport-kiosk-backend
 ```
 
-2. **Create storage directory**:
-```bash
-mkdir -p /mnt/storage/sport-kiosk/redis
-```
+### Access
 
-3. **Build and start containers**:
-```bash
-cd ~/home-server/sport-kiosk
-docker compose up -d --build
-```
-
-4. **Verify services are running**:
-```bash
-docker ps | grep sports-kiosk
-docker logs sports-kiosk-backend
-```
-
-You should see:
-- `✓ Connected to Redis`
-- `✓ Server running on port 3001`
-- `✓ NBA: X live, Y upcoming`
-
-## Access
-
-### Local Network
-
-- **Frontend (Kiosk)**: http://192.168.1.154:3000
-- **Backend API**: http://192.168.1.154:3001
-- **Health Check**: http://192.168.1.154:3001/health
-
-### Remote Access (Tailscale VPN)
-
-- **Frontend**: http://100.126.21.128:3000
-- **Backend API**: http://100.126.21.128:3001
-
-### Tablet/Mobile Setup
-
-1. Connect device to Tailscale VPN
-2. Open browser to `http://100.126.21.128:3000`
-3. Enable full-screen/kiosk mode:
-   - **Android**: Use "Kiosk Browser" or "Fully Kiosk Browser" from Play Store
-   - **iOS**: Add to Home Screen, then open
-   - **Chrome**: Press F11 for full-screen
-
-## Docker Compose Configuration
-
-**Location**: `~/home-server/sport-kiosk/docker-compose.yml`
-
-**Key Settings:**
-
-```yaml
-services:
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - /mnt/storage/sport-kiosk/redis:/data  # Redis cache on SSD
-    restart: unless-stopped
-
-  backend:
-    ports: ["3001:3001"]
-    environment:
-      - TZ=America/Chicago
-      - REDIS_HOST=redis
-    restart: unless-stopped
-
-  frontend:
-    ports: ["3000:80"]
-    restart: unless-stopped
-```
-
-**Important:**
-- Redis data stored on SSD at `/mnt/storage/sport-kiosk/redis`
-- Timezone: `America/Chicago` (matches home server)
-- Restart policy: `unless-stopped`
+| Interface | URL |
+|-----------|-----|
+| Local | http://<local-ip>:3000 |
+| Tailscale | http://<tailscale-ip>:3000 |
 
 ## API Endpoints
 
-### Individual Sports
-- `GET /api/sports/nba` - Get NBA live scores and schedule
-- `GET /api/sports/nfl` - Get NFL live scores and schedule
-- `GET /api/sports/f1` - Get F1 race information
-- `GET /api/sports/mlb` - Get MLB live scores and schedule
-- `GET /api/sports/tourdefrance` - Get Tour de France stage information
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health` | Health check with Redis status |
+| `GET /api/games` | Returns `{ live: Game[], upcoming: Game[], lastUpdated: string }` |
 
-### Combined View
-- `GET /api/sports/all` - Get all sports combined and sorted chronologically
-  - Returns: `{ live: [...], upcoming: [...], counts: {...} }`
-  - Live games from all sports
-  - Upcoming games sorted by date/time
-  - Count breakdown by sport
+### Game Object
 
-### System
-- `GET /api/sports/status` - Check service status
-- `GET /health` - Backend health check
-
-**Example Response** (`/api/sports/nba`):
-```json
-{
-  "live": [
-    {
-      "homeTeam": "Lakers",
-      "awayTeam": "Warriors",
-      "homeScore": 98,
-      "awayScore": 95,
-      "status": "Q4 2:30",
-      "homeLogo": "...",
-      "awayLogo": "..."
-    }
-  ],
-  "upcoming": [
-    {
-      "homeTeam": "Bulls",
-      "awayTeam": "Heat",
-      "date": "Nov 27, 2025",
-      "time": "7:00 PM",
-      "status": "pre",
-      "homeLogo": "...",
-      "awayLogo": "..."
-    }
-  ]
+```typescript
+interface Game {
+  id: string;
+  sport: 'nba' | 'nfl' | 'mlb' | 'f1' | 'ufc' | 'cricket' | 'tennis';
+  status: 'scheduled' | 'live' | 'final';
+  startTime: string;          // ISO 8601
+  name: string;               // "Lakers vs Celtics"
+  competitors: Array<{
+    name: string;
+    shortName: string;        // "LAL"
+    logo?: string;
+    score: string | number;
+    isHome?: boolean;
+  }>;
+  clock?: {
+    displayValue: string;     // "Q3 5:42", "Lap 45"
+  };
+  broadcast?: string;         // "ESPN"
 }
 ```
 
-## Service Management
+## Sports Coverage
 
-### Start/Stop
+| Sport | ESPN Endpoint | Cache TTL |
+|-------|--------------|-----------|
+| NBA | basketball/nba/scoreboard | 30s live, 5min schedule |
+| NFL | football/nfl/scoreboard | 30s live, 5min schedule |
+| MLB | baseball/mlb/scoreboard | 30s live, 5min schedule |
+| F1 | racing/f1/scoreboard | 30s live, 15min schedule |
+| UFC | mma/ufc/scoreboard | 30s live, 15min schedule |
+| Cricket | cricket/scoreboard | 30s live, 10min schedule |
+| Tennis | tennis/atp/scoreboard | 30s live, 10min schedule |
 
-```bash
-# Start services
-cd ~/home-server/sport-kiosk
-docker compose up -d
+## Display Modes
 
-# Stop services
-docker compose down
+### Split View (Live Games Active)
+- **Left Panel (60%)**: Current live game with large scores
+- **Right Panel (40%)**: Scrollable list of upcoming games
+- Auto-rotates between live games every 30 seconds
 
-# Restart services
-docker compose restart
-
-# Restart individual service
-docker restart sports-kiosk-backend
-docker restart sports-kiosk-frontend
-docker restart sports-kiosk-redis
-```
-
-### View Logs
-
-```bash
-# Backend logs (shows API fetches and cron jobs)
-docker logs sports-kiosk-backend
-docker logs -f sports-kiosk-backend  # Follow in real-time
-
-# Frontend logs
-docker logs sports-kiosk-frontend
-
-# Redis logs
-docker logs sports-kiosk-redis
-
-# All logs
-docker compose logs -f
-```
-
-### Monitor Resources
-
-```bash
-# Monitor all containers
-docker stats
-
-# Monitor specific container
-docker stats sports-kiosk-backend
-```
-
-## Updates
-
-### Update to Latest Version
-
-```bash
-cd ~/home-server/sport-kiosk
-
-# Pull latest code
-git pull
-
-# Rebuild and restart
-docker compose down
-docker compose up -d --build
-
-# Verify
-docker logs sports-kiosk-backend
-```
-
-### Update ESPN API Data
-
-Data updates automatically via cron jobs:
-- **Live scores**: Every 1 minute
-- **Schedules**: Every 15 minutes
-
-To manually trigger an update, restart the backend:
-```bash
-docker restart sports-kiosk-backend
-```
-
-## Storage
-
-All persistent data is stored on the **1TB SSD** at `/mnt/storage/sport-kiosk/`:
-
-```
-/mnt/storage/sport-kiosk/
-└── redis/              # Redis cache data (TTL: 1-15 minutes)
-```
-
-**Check storage usage:**
-```bash
-du -sh /mnt/storage/sport-kiosk/*
-```
-
-Redis cache is ephemeral with short TTLs, so data loss is not critical.
+### Full View (No Live Games)
+- Grid layout of all upcoming games
+- Responsive columns based on screen width
 
 ## Configuration
 
-### Display Timing
+### Environment Variables
 
-Located in `frontend/src/App.jsx`:
-- **Sport cycling**: 30 seconds per sport
-- **Frontend polling**: Every 60 seconds
-- **Live game scrolling**: 5 seconds per game (when multiple live)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TZ` | America/Chicago | Timezone for scheduling |
+| `REDIS_HOST` | sport-kiosk-redis | Redis hostname |
+| `REDIS_PORT` | 6379 | Redis port |
+| `PORT` | 3001 | Backend API port |
 
-### Backend Polling
+## Storage
 
-Located in `backend/src/server.js`:
-- **Cron schedule**: `*/1 * * * *` (every 1 minute)
+| Purpose | Path |
+|---------|------|
+| Redis persistence | `/mnt/storage/sport-kiosk/redis/` |
+| Source code | `~/raspberry-pi-server-setup/sport-kiosk/` |
 
-### Cache TTLs
+## Commands
 
-Located in `backend/src/services/nbaService.js`:
-- **Live scores**: 60 seconds
-- **Schedule data**: 900 seconds (15 minutes)
+### Service Management
 
-### Timezone
+```bash
+# Start
+cd ~/raspberry-pi-server-setup/sport-kiosk && docker compose up -d
 
-Configured via `TZ` environment variable in `docker-compose.yml`:
-```yaml
-environment:
-  - TZ=America/Chicago
+# Stop
+cd ~/raspberry-pi-server-setup/sport-kiosk && docker compose down
+
+# Restart
+cd ~/raspberry-pi-server-setup/sport-kiosk && docker compose restart
+
+# Rebuild after code changes
+cd ~/raspberry-pi-server-setup/sport-kiosk && docker compose up -d --build
+```
+
+### Monitoring
+
+```bash
+# View logs
+docker logs sport-kiosk-backend
+docker logs sport-kiosk-frontend
+docker logs sport-kiosk-redis
+
+# Follow logs
+docker logs -f sport-kiosk-backend
+
+# Check container status
+docker ps | grep sport-kiosk
+
+# Resource usage
+docker stats sport-kiosk-backend sport-kiosk-frontend sport-kiosk-redis
+```
+
+### Testing
+
+```bash
+# Health check
+curl http://localhost:3000/api/health | jq
+
+# Games endpoint
+curl http://localhost:3000/api/games | jq
 ```
 
 ## Troubleshooting
 
-### No Data Showing
+### No games appearing
+1. Check backend logs: `docker logs sport-kiosk-backend`
+2. Verify Redis connection: `curl http://localhost:3000/api/health`
+3. Check if ESPN API is accessible from the container
 
-**Symptoms**: Frontend displays "Coming Soon" or blank screen
+### High CPU usage
+- Normal: 5-10% during polling
+- If consistently high, check for excessive API calls in logs
 
-**Solutions**:
-1. Check backend is fetching data:
-   ```bash
-   docker logs sports-kiosk-backend | grep NBA
-   # Should see: ✓ NBA: X live, Y upcoming
-   ```
+### Frontend not loading
+1. Check nginx logs: `docker logs sport-kiosk-frontend`
+2. Verify backend is running and healthy
+3. Check browser console for errors
 
-2. Check ESPN API accessibility:
-   ```bash
-   curl https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard
-   ```
+### Redis connection failed
+1. Check Redis container: `docker ps | grep redis`
+2. Restart Redis: `docker restart sport-kiosk-redis`
+3. Check volume permissions: `ls -la /mnt/storage/sport-kiosk/redis`
 
-3. Check Redis connection:
-   ```bash
-   docker logs sports-kiosk-backend | grep Redis
-   # Should see: ✓ Connected to Redis
-   ```
+## Tablet Setup
 
-4. Restart backend:
-   ```bash
-   docker restart sports-kiosk-backend
-   ```
+### Recommended Settings
 
-### Backend Not Starting
+1. Open Safari/Chrome on tablet
+2. Navigate to http://<local-ip>:3000
+3. Lock screen to landscape orientation
+4. Add to Home Screen for fullscreen experience
+5. Enable "Guided Access" (iOS) or "Pin App" (Android) for kiosk mode
 
-**Symptoms**: Container exits immediately or logs show errors
+### Optimal Display
 
-**Solutions**:
-1. Check Redis is running:
-   ```bash
-   docker ps | grep redis
-   ```
-
-2. View detailed logs:
-   ```bash
-   docker logs sports-kiosk-backend
-   ```
-
-3. Ensure storage directory exists:
-   ```bash
-   ls -la /mnt/storage/sport-kiosk/redis
-   ```
-
-4. Check port conflicts:
-   ```bash
-   netstat -tuln | grep -E '3000|3001|6379'
-   ```
-
-### Frontend Not Loading
-
-**Symptoms**: Blank page or 404 errors
-
-**Solutions**:
-1. Check frontend logs:
-   ```bash
-   docker logs sports-kiosk-frontend
-   ```
-
-2. Verify frontend is running:
-   ```bash
-   curl -I http://localhost:3000
-   # Should return: HTTP/1.1 200 OK
-   ```
-
-3. Check nginx configuration:
-   ```bash
-   docker exec sports-kiosk-frontend cat /etc/nginx/conf.d/default.conf
-   ```
-
-4. Rebuild frontend:
-   ```bash
-   cd ~/home-server/sport-kiosk
-   docker compose up -d --build frontend
-   ```
-
-### High CPU Usage
-
-**Symptoms**: Backend using >100% CPU constantly
-
-**Causes**: Excessive API polling or cron job issues
-
-**Solutions**:
-1. Check cron job frequency:
-   ```bash
-   docker logs sports-kiosk-backend | grep CRON
-   ```
-
-2. Verify cron is running every 1 minute (not more frequently)
-
-3. Restart backend to clear any issues:
-   ```bash
-   docker restart sports-kiosk-backend
-   ```
-
-### Redis Connection Issues
-
-**Symptoms**: Logs show Redis connection errors
-
-**Solutions**:
-1. Check Redis is running:
-   ```bash
-   docker ps | grep redis
-   docker logs sports-kiosk-redis
-   ```
-
-2. Restart Redis:
-   ```bash
-   docker restart sports-kiosk-redis
-   ```
-
-3. Restart backend after Redis is up:
-   ```bash
-   docker restart sports-kiosk-backend
-   ```
-
-### Timezone Incorrect
-
-**Symptoms**: Game times showing wrong timezone
-
-**Solutions**:
-1. Verify TZ environment variable:
-   ```bash
-   docker exec sports-kiosk-backend env | grep TZ
-   # Should show: TZ=America/Chicago
-   ```
-
-2. Update `docker-compose.yml` if needed and rebuild:
-   ```bash
-   docker compose up -d --build
-   ```
-
-## Performance
-
-### Normal Resource Usage
-
-- **Backend**: 5-10% CPU, 50-100MB RAM
-- **Frontend**: 1-3% CPU, 20-40MB RAM
-- **Redis**: 1-2% CPU, 10-20MB RAM
-
-### Expected Behavior
-
-- Backend logs show cron updates every 1 minute
-- Frontend serves static files efficiently via Nginx
-- Redis cache keeps data in memory with automatic TTL expiration
-
-### Optimization Tips
-
-1. **Reduce polling frequency** if resources are tight:
-   - Edit `backend/src/server.js` cron schedule to `*/5 * * * *` (every 5 minutes)
-
-2. **Reduce frontend refresh rate**:
-   - Edit `frontend/src/App.jsx` fetch interval to 120000ms (2 minutes)
-
-3. **Monitor with docker stats**:
-   ```bash
-   docker stats --no-stream sports-kiosk-backend sports-kiosk-frontend sports-kiosk-redis
-   ```
+- Screen: 10" or larger tablet
+- Orientation: Landscape
+- Brightness: 50-70% for ambient viewing
+- Auto-lock: Disabled or extended
 
 ## Development
 
-### Local Development (without Docker)
+### Local Development
 
-**Backend**:
 ```bash
-cd ~/home-server/sport-kiosk/backend
+# Backend
+cd backend
 npm install
-npm run dev  # Starts with nodemon on port 3001
-```
+npm run dev
 
-**Frontend**:
-```bash
-cd ~/home-server/sport-kiosk/frontend
+# Frontend (separate terminal)
+cd frontend
 npm install
-npm run dev  # Vite dev server on port 5173
+npm run dev
 ```
 
-### Adding New Sports
+### Project Structure
 
-To add a new sport (e.g., NFL):
-
-1. Create service: `backend/src/services/nflService.js`
-2. Add route in `backend/src/routes/sports.js`
-3. Add cron job in `backend/src/server.js`
-4. Create component: `frontend/src/components/NFLDisplay.jsx`
-5. Update `frontend/src/App.jsx`
-
-See `CLAUDE.md` for detailed instructions.
-
-## Maintenance
-
-### Regular Tasks
-
-**Weekly**:
-- Check disk space: `df -h /mnt/storage`
-- Monitor logs for errors: `docker logs sports-kiosk-backend | grep -i error`
-
-**Monthly**:
-- Update to latest version: `git pull && docker compose up -d --build`
-- Review resource usage: `docker stats --no-stream`
-
-### Backup
-
-Redis cache is ephemeral (1-15 minute TTLs). No backup needed.
-
-Application code is version-controlled in Git:
-```bash
-cd ~/home-server/sport-kiosk
-git status
-git log
+```
+sport-kiosk/
+├── docker-compose.yml
+├── README.md
+├── backend/
+│   ├── Dockerfile
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── src/
+│       ├── index.ts              # Express server
+│       ├── config/sports.ts      # Sport definitions
+│       ├── routes/
+│       │   ├── games.ts          # /api/games endpoint
+│       │   └── health.ts         # Health check
+│       ├── services/
+│       │   ├── espn.ts           # ESPN API client
+│       │   ├── cache.ts          # Redis cache
+│       │   └── scheduler.ts      # Polling scheduler
+│       ├── transformers/index.ts # ESPN → unified model
+│       └── types/game.ts         # TypeScript interfaces
+└── frontend/
+    ├── Dockerfile
+    ├── nginx.conf
+    ├── package.json
+    ├── vite.config.ts
+    └── src/
+        ├── main.tsx
+        ├── App.tsx
+        ├── hooks/
+        │   ├── useGames.ts       # API polling hook
+        │   └── useRotation.ts    # Live game rotation
+        ├── components/
+        │   ├── KioskLayout.tsx   # Layout switcher
+        │   ├── SplitView.tsx     # 60/40 split
+        │   ├── FullView.tsx      # Full screen
+        │   ├── LiveGamePanel.tsx # Large score display
+        │   ├── UpcomingList.tsx  # Game list
+        │   └── GameCard.tsx      # Individual game
+        └── styles/kiosk.css      # Dark theme
 ```
 
-## Technical Details
+## Performance
 
-### External APIs
+| Container | Idle CPU | Idle RAM |
+|-----------|----------|----------|
+| Backend | 1-5% | 50-80MB |
+| Frontend (Nginx) | <1% | 10-20MB |
+| Redis | <1% | 10-20MB |
 
-- **NBA**: ESPN API - `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard`
-- Free, no API key required
-- Returns JSON with game status: 'pre' (scheduled), 'in' (live), 'post' (finished)
-
-### Cache Strategy
-
-**Two-tier caching**:
-1. **Live scores** (`nba:live`): 60-second TTL for real-time updates
-2. **Schedule** (`nba:schedule`): 15-minute TTL for upcoming games
-
-**Redis keys**:
-- `nba:live` - Array of in-progress games
-- `nba:schedule` - Array of upcoming games
-
-### Network Ports
-
-- **3000**: Frontend (Nginx serving React app)
-- **3001**: Backend (Express API)
-- **6379**: Redis (cache)
-
-All ports are accessible on both local network (192.168.1.154) and Tailscale VPN (100.126.21.128).
-
-## Related Documentation
-
-- **Main Home Server**: `~/home-server/README.md`
-- **Hardware Setup**: `~/home-server/hardware/README.md`
-- **Tailscale VPN**: `~/home-server/tailscale/README.md`
-- **Developer Guide**: `~/home-server/sport-kiosk/CLAUDE.md`
-
-## License
-
-MIT
-
-## Contributing
-
-Feel free to submit issues and pull requests for new sports integrations at https://github.com/Cruzh3r2107/sport-kiosk
+Polling frequency:
+- Live games active: Every 30 seconds
+- No live games: Every 5 minutes
